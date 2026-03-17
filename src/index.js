@@ -1,11 +1,10 @@
-const INSTAGRAM_LINK_REGEX =
-  /https?:\/\/(?:www\.)?instagram\.com\/[^\s<>"']+/i;
+const YOUTUBE_LINK_REGEX =
+  /https?:\/\/(?:www\.)?(?:youtube\.com\/(?:watch\?[^\s<>"']*v=[\w-]{6,}|shorts\/[\w-]{6,}|live\/[\w-]{6,}|embed\/[\w-]{6,})|youtu\.be\/[\w-]{6,})[^\s<>"']*/i;
 
-const VIDEO_EXTENSIONS = [".mp4", ".mov", ".m4v"];
-const PHOTO_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
+const VIDEO_EXTENSIONS = [".mp4", ".m4v", ".mov", ".webm"];
 
 const HELP_TEXT =
-  "Send me an Instagram post/reel URL and I will fetch downloadable media for you.";
+  "Send me a YouTube link and I will fetch MP4 download links for you.";
 
 export default {
   async fetch(request, env, ctx) {
@@ -26,7 +25,7 @@ async function routeRequest(request, env, ctx) {
   if (request.method === "GET" && url.pathname === "/") {
     return json({
       ok: true,
-      service: "telegram-instagram-downloader",
+      service: "telegram-youtube-mp4-downloader",
       webhookPath,
       now: new Date().toISOString(),
     });
@@ -78,7 +77,7 @@ async function handleUpdate(update, env) {
   if (text.startsWith("/start")) {
     await sendMessage(
       chatId,
-      "Send an Instagram link (post/reel) and I will download media using RapidAPI.",
+      "Send a YouTube link and I will return MP4 download options via RapidAPI.",
       env,
     );
     return;
@@ -89,11 +88,11 @@ async function handleUpdate(update, env) {
     return;
   }
 
-  const instagramUrl = extractInstagramUrl(text);
-  if (!instagramUrl) {
+  const youtubeUrl = extractYouTubeUrl(text);
+  if (!youtubeUrl) {
     await sendMessage(
       chatId,
-      "I could not find an Instagram URL in your message. Please send a full link.",
+      "I could not find a YouTube URL in your message. Please send a full link.",
       env,
     );
     return;
@@ -105,8 +104,8 @@ async function handleUpdate(update, env) {
   });
 
   try {
-    const media = await fetchInstagramMedia(instagramUrl, env);
-    await deliverMediaToTelegram(chatId, instagramUrl, media, env);
+    const media = await fetchYouTubeMedia(youtubeUrl, env);
+    await deliverMediaToTelegram(chatId, youtubeUrl, media, env);
   } catch (error) {
     const messageText =
       error instanceof Error ? error.message : "Unexpected processing error";
@@ -114,73 +113,35 @@ async function handleUpdate(update, env) {
   }
 }
 
-async function fetchInstagramMedia(instagramUrl, env) {
-  const provider = (env.DOWNLOADER_PROVIDER || "AUTO").toUpperCase();
-  const hasRapidApi = Boolean(env.RAPIDAPI_KEY);
-  const hasApify = Boolean(env.APIFY_TOKEN);
-  let rapidError = null;
-
-  if (provider === "RAPIDAPI") {
-    return fetchFromRapidApi(instagramUrl, env);
-  }
-
-  if (provider === "APIFY") {
-    return fetchFromApify(instagramUrl, env);
-  }
-
-  if (hasRapidApi) {
-    try {
-      return await fetchFromRapidApi(instagramUrl, env);
-    } catch (error) {
-      rapidError = error;
-      if (!hasApify || !isRapidApiQuotaError(error)) {
-        throw error;
-      }
-    }
-  }
-
-  if (hasApify) {
-    try {
-      return await fetchFromApify(instagramUrl, env);
-    } catch (apifyError) {
-      if (rapidError) {
-        const rapidMessage =
-          rapidError instanceof Error ? rapidError.message : String(rapidError);
-        const apifyMessage =
-          apifyError instanceof Error ? apifyError.message : String(apifyError);
-        throw new Error(
-          `RapidAPI failed: ${rapidMessage} | Apify failed: ${apifyMessage}`,
-        );
-      }
-      throw apifyError;
-    }
-  }
-
-  throw new Error(
-    "No downloader provider credentials found. Add RAPIDAPI_KEY or APIFY_TOKEN.",
-  );
+async function fetchYouTubeMedia(youtubeUrl, env) {
+  return fetchFromRapidApi(youtubeUrl, env);
 }
 
-async function fetchFromRapidApi(instagramUrl, env) {
+async function fetchFromRapidApi(youtubeUrl, env) {
   const rapidApiKey = env.RAPIDAPI_KEY;
   const endpoint =
     env.RAPIDAPI_ENDPOINT ||
-    "https://instagram-video-downloader13.p.rapidapi.com/index.php";
+    "https://youtube-to-mp4.p.rapidapi.com/url-title";
   const host = env.RAPIDAPI_HOST || new URL(endpoint).hostname;
+  const title = (env.RAPIDAPI_TITLE || "Telegram MP4 Download").trim();
 
   if (!rapidApiKey) {
     throw new Error("RAPIDAPI_KEY is missing in Worker secrets.");
   }
 
-  const body = new URLSearchParams({ url: instagramUrl }).toString();
-  const response = await fetch(endpoint, {
-    method: "POST",
+  const requestUrl = new URL(endpoint);
+  requestUrl.searchParams.set("url", youtubeUrl);
+  if (title) {
+    requestUrl.searchParams.set("title", title);
+  }
+
+  const response = await fetch(requestUrl.toString(), {
+    method: "GET",
     headers: {
-      "content-type": "application/x-www-form-urlencoded",
+      "content-type": "application/json",
       "x-rapidapi-key": rapidApiKey,
       "x-rapidapi-host": host,
     },
-    body,
   });
 
   const rawText = await response.text();
@@ -204,76 +165,11 @@ async function fetchFromRapidApi(instagramUrl, env) {
       throw new Error(`RapidAPI error: ${apiError}`);
     }
     throw new Error(
-      "RapidAPI returned no downloadable media links for this Instagram URL.",
+      "RapidAPI returned no downloadable media links for this YouTube URL.",
     );
   }
 
   return media;
-}
-
-async function fetchFromApify(instagramUrl, env) {
-  const token = env.APIFY_TOKEN;
-  const actorId = env.APIFY_ACTOR_ID || "igview-owner/instagram-video-downloader";
-  const quality = env.APIFY_QUALITY || "1080";
-  const timeoutSecs = Number.parseInt(env.APIFY_TIMEOUT_SECS || "90", 10);
-
-  if (!token) {
-    throw new Error("APIFY_TOKEN is missing in Worker secrets.");
-  }
-
-  const actorPath = actorId.replace("/", "~");
-  const query = new URLSearchParams({
-    token,
-    format: "json",
-    clean: "true",
-    timeout: String(Number.isFinite(timeoutSecs) ? timeoutSecs : 90),
-  });
-
-  const endpoint = `https://api.apify.com/v2/acts/${actorPath}/run-sync-get-dataset-items?${query.toString()}`;
-  const payload = {
-    instagram_urls: [instagramUrl],
-    urls: [instagramUrl],
-    quality,
-  };
-
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  const rawText = await response.text();
-  if (!response.ok) {
-    throw new Error(
-      `Apify request failed (${response.status}): ${truncate(rawText, 220)}`,
-    );
-  }
-
-  let parsed;
-  try {
-    parsed = JSON.parse(rawText);
-  } catch {
-    parsed = rawText;
-  }
-
-  const media = parseMediaUrls(parsed, rawText);
-  if (media.videoUrls.length === 0 && media.photoUrls.length === 0) {
-    throw new Error("Apify returned no downloadable media links.");
-  }
-
-  return media;
-}
-
-function isRapidApiQuotaError(error) {
-  const message = error instanceof Error ? error.message.toLowerCase() : "";
-  return (
-    message.includes("429") ||
-    message.includes("quota") ||
-    message.includes("rate limit") ||
-    message.includes("exceeded")
-  );
 }
 
 function parseMediaUrls(payload, rawText) {
@@ -335,101 +231,92 @@ function isLikelyMediaUrl(value) {
   }
 
   const lower = value.toLowerCase();
-  if (lower.includes("instagram.com/reel/")) {
-    return false;
-  }
-  if (lower.includes("instagram.com/p/")) {
-    return false;
-  }
-  if (lower.includes("instagram.com/tv/")) {
-    return false;
-  }
-  if (lower.includes("instagram.com/stories/")) {
+  if (isYouTubePageUrl(lower)) {
     return false;
   }
 
-  const hasKnownExtension =
-    VIDEO_EXTENSIONS.some((ext) => lower.includes(ext)) ||
-    PHOTO_EXTENSIONS.some((ext) => lower.includes(ext));
+  const hasKnownExtension = VIDEO_EXTENSIONS.some((ext) =>
+    lower.includes(ext),
+  );
 
-  return hasKnownExtension || lower.includes("cdninstagram");
+  return (
+    hasKnownExtension ||
+    lower.includes("mime=video") ||
+    lower.includes("video%2fmp4") ||
+    lower.includes("googlevideo.com")
+  );
 }
 
 function isVideoUrl(value) {
   const lower = value.toLowerCase();
   return (
     VIDEO_EXTENSIONS.some((ext) => lower.includes(ext)) ||
-    (lower.includes("video") && !PHOTO_EXTENSIONS.some((ext) => lower.includes(ext)))
+    lower.includes("mime=video") ||
+    lower.includes("video%2fmp4") ||
+    lower.includes("googlevideo.com")
+  );
+}
+
+function isYouTubePageUrl(lowerUrl) {
+  return (
+    lowerUrl.includes("youtube.com/watch") ||
+    lowerUrl.includes("youtube.com/shorts/") ||
+    lowerUrl.includes("youtube.com/live/") ||
+    lowerUrl.includes("youtu.be/")
   );
 }
 
 async function deliverMediaToTelegram(chatId, sourceUrl, media, env) {
-  const caption = `Instagram source: ${sourceUrl}`;
-  const videos = media.videoUrls.slice(0, 10);
-  const photos = media.photoUrls.slice(0, 10);
+  const caption = `YouTube source: ${sourceUrl}`;
+  const videos = media.videoUrls.slice(0, 5);
+  const others = media.photoUrls.slice(0, 5);
 
   try {
-    if (videos.length >= 2) {
-      await sendMediaGroup(
-        chatId,
-        videos.map((item, index) => ({
-          type: "video",
-          media: item,
-          caption: index === 0 ? caption : undefined,
-        })),
-        env,
-      );
-    } else if (videos.length === 1) {
+    if (videos.length > 0) {
       await telegramRequest(env, "sendVideo", {
         chat_id: chatId,
-        video: videos[0],
+        video: pickBestVideoUrl(videos),
         caption,
       });
-    }
-
-    if (photos.length >= 2) {
-      await sendMediaGroup(
-        chatId,
-        photos.map((item, index) => ({
-          type: "photo",
-          media: item,
-          caption: index === 0 && videos.length === 0 ? caption : undefined,
-        })),
-        env,
-      );
-    } else if (photos.length === 1 && videos.length === 0) {
-      await telegramRequest(env, "sendPhoto", {
-        chat_id: chatId,
-        photo: photos[0],
-        caption,
-      });
-    }
-
-    if (videos.length === 0 && photos.length === 0 && media.allUrls.length > 0) {
+    } else if (others.length > 0) {
       await sendMessage(
         chatId,
-        `Media extracted, but Telegram could not auto-send. Direct links:\n${media.allUrls.join("\n")}`,
+        `MP4 candidates found, but none could be auto-attached. Direct links:\n${others.join("\n")}`,
+        env,
+      );
+    } else if (media.allUrls.length > 0) {
+      await sendMessage(
+        chatId,
+        `Download links:\n${media.allUrls.join("\n")}`,
         env,
       );
     }
   } catch {
     await sendMessage(
       chatId,
-      `Telegram could not upload media directly. Here are direct links:\n${media.allUrls.join("\n")}`,
+      `Telegram could not upload video directly. Here are direct links:\n${media.allUrls.join("\n")}`,
       env,
     );
   }
 }
 
-async function sendMediaGroup(chatId, media, env) {
-  if (media.length < 2) {
-    return;
-  }
+function pickBestVideoUrl(videoUrls) {
+  const ranked = [...videoUrls].sort((a, b) => scoreVideoUrl(b) - scoreVideoUrl(a));
+  return ranked[0];
+}
 
-  await telegramRequest(env, "sendMediaGroup", {
-    chat_id: chatId,
-    media,
-  });
+function scoreVideoUrl(urlValue) {
+  const lower = urlValue.toLowerCase();
+  let score = 0;
+  if (lower.includes("1080")) score += 40;
+  if (lower.includes("720")) score += 30;
+  if (lower.includes("480")) score += 20;
+  if (lower.includes(".mp4")) score += 15;
+  if (lower.includes("googlevideo.com")) score += 10;
+  if (lower.includes("itag=37")) score += 35;
+  if (lower.includes("itag=22")) score += 25;
+  if (lower.includes("itag=18")) score += 15;
+  return score;
 }
 
 async function sendMessage(chatId, text, env) {
@@ -470,8 +357,8 @@ async function telegramRequest(env, method, payload) {
   return parsed.result;
 }
 
-function extractInstagramUrl(text) {
-  const match = text.match(INSTAGRAM_LINK_REGEX);
+function extractYouTubeUrl(text) {
+  const match = text.match(YOUTUBE_LINK_REGEX);
   return match ? cleanUrl(match[0]) : null;
 }
 

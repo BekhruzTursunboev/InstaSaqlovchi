@@ -1,13 +1,10 @@
-name = "telegram-instagram-downloader-bot"
+name = "telegram-youtube-mp4-bot"
 main = "src/index.js"
 compatibility_date = "2026-03-17"
 workers_dev = true
 
 [vars]
 TELEGRAM_WEBHOOK_PATH = "/webhook"
-RAPIDAPI_ENDPOINT = "https://instagram-video-downloader13.p.rapidapi.com/index.php"
-RAPIDAPI_HOST = "instagram-video-downloader13.p.rapidapi.com"
-DOWNLOADER_PROVIDER = "AUTO"
-APIFY_ACTOR_ID = "igview-owner/instagram-video-downloader"
-APIFY_QUALITY = "1080"
-APIFY_TIMEOUT_SECS = "90"
+RAPIDAPI_ENDPOINT = "https://youtube-to-mp4.p.rapidapi.com/url-title"
+RAPIDAPI_HOST = "youtube-to-mp4.p.rapidapi.com"
+RAPIDAPI_TITLE = "Telegram MP4 Download"

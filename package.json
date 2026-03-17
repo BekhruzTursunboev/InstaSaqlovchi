@@ -1,7 +1,7 @@
 {
-  "name": "telegram-instagram-downloader-worker",
+  "name": "telegram-youtube-mp4-worker",
   "version": "1.0.0",
-  "description": "Telegram bot on Cloudflare Workers that downloads Instagram media via RapidAPI.",
+  "description": "Telegram bot on Cloudflare Workers that downloads YouTube MP4 via RapidAPI.",
   "private": true,
   "type": "module",
   "scripts": {
