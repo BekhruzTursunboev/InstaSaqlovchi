@@ -79,7 +79,8 @@ After deploy, run:
 WORKER_URL="https://telegram-youtube-mp4-bot.<subdomain>.workers.dev" npm run set:webhook
 ```
 
-If you set webhook secret, include `TELEGRAM_WEBHOOK_SECRET` in your env before running.
+`set-webhook` auto-loads `TELEGRAM_BOT_TOKEN` from local `.dev.vars` if present.
+If you set webhook secret, keep `TELEGRAM_WEBHOOK_SECRET` in `.dev.vars` or export it before running.
 
 ## 6) Test in Telegram
 
