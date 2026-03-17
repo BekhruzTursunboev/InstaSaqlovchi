@@ -115,6 +115,53 @@ async function handleUpdate(update, env) {
 }
 
 async function fetchInstagramMedia(instagramUrl, env) {
+  const provider = (env.DOWNLOADER_PROVIDER || "AUTO").toUpperCase();
+  const hasRapidApi = Boolean(env.RAPIDAPI_KEY);
+  const hasApify = Boolean(env.APIFY_TOKEN);
+  let rapidError = null;
+
+  if (provider === "RAPIDAPI") {
+    return fetchFromRapidApi(instagramUrl, env);
+  }
+
+  if (provider === "APIFY") {
+    return fetchFromApify(instagramUrl, env);
+  }
+
+  if (hasRapidApi) {
+    try {
+      return await fetchFromRapidApi(instagramUrl, env);
+    } catch (error) {
+      rapidError = error;
+      if (!hasApify || !isRapidApiQuotaError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  if (hasApify) {
+    try {
+      return await fetchFromApify(instagramUrl, env);
+    } catch (apifyError) {
+      if (rapidError) {
+        const rapidMessage =
+          rapidError instanceof Error ? rapidError.message : String(rapidError);
+        const apifyMessage =
+          apifyError instanceof Error ? apifyError.message : String(apifyError);
+        throw new Error(
+          `RapidAPI failed: ${rapidMessage} | Apify failed: ${apifyMessage}`,
+        );
+      }
+      throw apifyError;
+    }
+  }
+
+  throw new Error(
+    "No downloader provider credentials found. Add RAPIDAPI_KEY or APIFY_TOKEN.",
+  );
+}
+
+async function fetchFromRapidApi(instagramUrl, env) {
   const rapidApiKey = env.RAPIDAPI_KEY;
   const endpoint =
     env.RAPIDAPI_ENDPOINT ||
@@ -162,6 +209,71 @@ async function fetchInstagramMedia(instagramUrl, env) {
   }
 
   return media;
+}
+
+async function fetchFromApify(instagramUrl, env) {
+  const token = env.APIFY_TOKEN;
+  const actorId = env.APIFY_ACTOR_ID || "igview-owner/instagram-video-downloader";
+  const quality = env.APIFY_QUALITY || "1080";
+  const timeoutSecs = Number.parseInt(env.APIFY_TIMEOUT_SECS || "90", 10);
+
+  if (!token) {
+    throw new Error("APIFY_TOKEN is missing in Worker secrets.");
+  }
+
+  const actorPath = actorId.replace("/", "~");
+  const query = new URLSearchParams({
+    token,
+    format: "json",
+    clean: "true",
+    timeout: String(Number.isFinite(timeoutSecs) ? timeoutSecs : 90),
+  });
+
+  const endpoint = `https://api.apify.com/v2/acts/${actorPath}/run-sync-get-dataset-items?${query.toString()}`;
+  const payload = {
+    instagram_urls: [instagramUrl],
+    urls: [instagramUrl],
+    quality,
+  };
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const rawText = await response.text();
+  if (!response.ok) {
+    throw new Error(
+      `Apify request failed (${response.status}): ${truncate(rawText, 220)}`,
+    );
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch {
+    parsed = rawText;
+  }
+
+  const media = parseMediaUrls(parsed, rawText);
+  if (media.videoUrls.length === 0 && media.photoUrls.length === 0) {
+    throw new Error("Apify returned no downloadable media links.");
+  }
+
+  return media;
+}
+
+function isRapidApiQuotaError(error) {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  return (
+    message.includes("429") ||
+    message.includes("quota") ||
+    message.includes("rate limit") ||
+    message.includes("exceeded")
+  );
 }
 
 function parseMediaUrls(payload, rawText) {

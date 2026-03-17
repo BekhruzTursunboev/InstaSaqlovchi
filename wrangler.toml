@@ -7,3 +7,7 @@ workers_dev = true
 TELEGRAM_WEBHOOK_PATH = "/webhook"
 RAPIDAPI_ENDPOINT = "https://instagram-video-downloader13.p.rapidapi.com/index.php"
 RAPIDAPI_HOST = "instagram-video-downloader13.p.rapidapi.com"
+DOWNLOADER_PROVIDER = "AUTO"
+APIFY_ACTOR_ID = "igview-owner/instagram-video-downloader"
+APIFY_QUALITY = "1080"
+APIFY_TIMEOUT_SECS = "90"

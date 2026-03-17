@@ -32,6 +32,8 @@ jobs:
           secrets: |
             TELEGRAM_BOT_TOKEN
             RAPIDAPI_KEY
+            APIFY_TOKEN
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
