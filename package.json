@@ -5,6 +5,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "start": "wrangler deploy",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "set:webhook": "node scripts/set-webhook.mjs",

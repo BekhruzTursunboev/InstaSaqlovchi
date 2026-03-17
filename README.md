@@ -58,6 +58,8 @@ npx wrangler login
 npm run deploy
 ```
 
+If your CI/Cloudflare build is configured to run `npm start`, this project now maps it to `wrangler deploy`.
+
 After deploy, note your Worker URL, for example:
 
 - `https://telegram-instagram-downloader-bot.<subdomain>.workers.dev`
@@ -81,6 +83,12 @@ If you want deployment from GitHub Actions, add these repository secrets:
 - `RAPIDAPI_KEY`
 
 Workflow file is included at `.github/workflows/deploy.yml` and deploys on push to `main`.
+
+Required repo secrets for CI deploy:
+
+- `CLOUDFLARE_API_TOKEN`
+- `TELEGRAM_BOT_TOKEN`
+- `RAPIDAPI_KEY`
 
 ## 6) Test
 
