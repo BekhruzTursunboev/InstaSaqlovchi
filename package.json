@@ -1,0 +1,16 @@
+{
+  "name": "telegram-instagram-downloader-worker",
+  "version": "1.0.0",
+  "description": "Telegram bot on Cloudflare Workers that downloads Instagram media via RapidAPI.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "set:webhook": "node scripts/set-webhook.mjs",
+    "check": "node --check src/index.js"
+  },
+  "devDependencies": {
+    "wrangler": "^4.16.0"
+  }
+}

@@ -1,0 +1,9 @@
+name = "telegram-instagram-downloader-bot"
+main = "src/index.js"
+compatibility_date = "2026-03-17"
+workers_dev = true
+
+[vars]
+TELEGRAM_WEBHOOK_PATH = "/webhook"
+RAPIDAPI_ENDPOINT = "https://instagram-video-downloader13.p.rapidapi.com/index.php"
+RAPIDAPI_HOST = "instagram-video-downloader13.p.rapidapi.com"
