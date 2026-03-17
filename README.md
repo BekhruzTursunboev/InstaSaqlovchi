@@ -58,7 +58,19 @@ npx wrangler login
 npm run deploy
 ```
 
-If your CI/Cloudflare build is configured to run `npm start`, this project now maps it to `wrangler deploy`.
+If your CI/Cloudflare build is configured to run `npm start`, this project now maps it to a safe build check (`npm run build`).
+Use `npm run deploy` only in a deploy step.
+
+### Cloudflare (Git-based) recommended settings
+
+- Build command: `npm start`
+- Deploy command: `npm run deploy`
+
+Required environment secrets:
+
+- `CLOUDFLARE_API_TOKEN` (for deploy step in CI)
+- `TELEGRAM_BOT_TOKEN`
+- `RAPIDAPI_KEY`
 
 After deploy, note your Worker URL, for example:
 
